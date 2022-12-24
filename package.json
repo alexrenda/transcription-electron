@@ -25,7 +25,10 @@
     "electron-squirrel-startup": "^1.0.0"
   },
   "config": {
-    "forge": {
+      "forge": {
+          "packagerConfig": {
+              "icon": "icon.icns"
+          },
       "makers": [
         {
           "name": "@electron-forge/maker-dmg",

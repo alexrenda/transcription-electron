@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, systemPreferences } = require('electron')
+const { app, BrowserWindow, Menu, systemPreferences, powerSaveBlocker } = require('electron')
 const cp = require("child_process");
 const path = require('path')
 const url = require('url')
@@ -87,29 +87,30 @@ async function start_streamer(mainWindow) {
 
     mainWindow.webContents.send('curr-line', "Loaded! Starting streaming...");
 
-    const args = ["-m", model_path, "-t", "7", "--step", "500", "--length", "500", "-c", "0", "-ac", "512"];
+    const args = ["-m", model_path, "-t", "7", "--step", "0", "--length", "30000", "-c", config.mic, "-vth", "0.6"];
 
     streamer = cp.spawn(path.join(app.getAppPath(), 'deps/whisper.cpp/stream'), args, {
         stdio: ['pipe', 'pipe', 'pipe'],
     });
-    console.log('running');
 
     streamer.stdout.on('data', (data) => {
         d_lines = data.toString().split("\n")
-        if (d_lines.length > 1) {
-            d_lines[0] = curr_line + d_lines[0]
-            for (let i = 0; i < d_lines.length - 1; i++) {
-                // everything after the final \r
-                let line = d_lines[i].split("\r").slice(-1)[0]
-                prev_lines.push(line)
+        for (let i = 0; i < d_lines.length - 1; i++) {
+            // remove any instance of (buzz***)
+            let line = d_lines[i].replace(/[([] *buzz.*? *[)\]]/g, '')
+            // split on "> "
+            line = line.split("> ")
+            // if starts with PRELIMINARY, replace curr_line
+            if (line[0] == "PRELIMINARY") {
+                curr_line = line[1]
+            } else {
+                // otherwise, add to prev_lines
+                prev_lines.push(line[1])
+                curr_line = ""
             }
-        } else {
-            curr_line += d_lines[0]
-            curr_line = curr_line.split("\r").slice(-1)[0]
         }
-
-        mainWindow.webContents.send('prev-lines', prev_lines.join("<br/>"))
-        mainWindow.webContents.send('curr-line', curr_line)
+        mainWindow.webContents.send('prev-lines', prev_lines.join("<br/>"));
+        mainWindow.webContents.send('curr-line', curr_line);
     });
 }
 
@@ -124,18 +125,12 @@ async function createWindow () {
         }
     })
     mainWindow.maximize()
-    const powerSaveBlocker = electron.remote.powerSaveBlocker;
+
     powerSaveBlocker.start('prevent-display-sleep');
 
     mainWindow.loadFile('index.html')
 
-    systemPreferences.askForMediaAccess('microphone').then((granted) => {
-        if (granted) {
-            console.log('granted')
-        } else {
-            console.log('denied')
-        }
-    })
+    systemPreferences.askForMediaAccess('microphone');
 
     // load config if exists
     config = {}
@@ -150,7 +145,7 @@ async function createWindow () {
     const micList = mics.split("\n").filter(x => x.length > 0)
 
     if (config.mic == null) {
-        config.mic = micList[0]
+        config.mic = 0
     }
 
     if (config.model == null) {
@@ -182,7 +177,8 @@ async function createWindow () {
             type: 'radio',
             checked: config.mic == mic,
             click: () => {
-                config.mic = mic;
+                // get index of mic in micList
+                config.mic = micList.indexOf(mic);
                 fs.writeFileSync(_CONFIG_FILE, JSON.stringify(config));
                 start_streamer(mainWindow);
             }
