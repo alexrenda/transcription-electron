@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      body {
+        font-size: 64px;
+        margin: 0;
+        padding: 0;
+      }
+      #prev-lines {
+        color: #111;
+      }
+      #curr-line {
+        color: #000;
+      }
+    </style>
+
+    <script type="text/javascript">
+      const { ipcRenderer } = require('electron')
+
+      ipcRenderer.on('prev-lines', (event, message) => {
+          document.getElementById('prev-lines').innerHTML = message
+      });
+
+      ipcRenderer.on('curr-line', (event, message) => {
+          let curr_line = document.getElementById('curr-line');
+          curr_line.innerHTML = message;
+          curr_line.scrollIntoView();
+      });
+
+      ipcRenderer.on('font-size', (event, message) => {
+          document.body.style.fontSize = message + 'px';
+      });
+
+    </script>
+    <meta charset="UTF-8">
+    <title>Transcription</title>
+  </head>
+  <body>
+    <div id="prev-lines"></div>
+    <div id="curr-line">Loading...</div>
+  </body>
+</html>
